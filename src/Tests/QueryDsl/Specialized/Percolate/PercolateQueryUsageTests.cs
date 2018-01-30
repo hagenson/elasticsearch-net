@@ -225,4 +225,66 @@ namespace Tests.QueryDsl.Specialized.Percolate
 			((IQueryContainer)match.Query).Match.Should().NotBeNull();
 		}
 	}
+
+	/**
+	* The percolate query can match multiple documents simultaneously with the indexed percolator queries.
+	* Percolating multiple documents in a single request can improve performance as queries only need to be parsed
+	* and matched once instead of multiple times.
+	*/
+	[SkipVersion("5.0.0-alpha1", "percolate query changed property in query dsl from 'percolator' to 'percolate'")]
+	public class PercolateQueryMultipleDocumentsTests : PercolateQueryUsageTestsBase
+	{
+		public PercolateQueryMultipleDocumentsTests(WritableCluster i, EndpointUsage usage) : base(i, usage) { }
+
+		protected object QueryJson => new
+		{
+			percolate = new
+			{
+				documents = Tests.Framework.MockData.Project.Projects.Take(3).ToArray(),
+				field = "query"
+			}
+		};
+
+		//hide
+		protected override Func<SearchDescriptor<ProjectPercolation>, ISearchRequest> Fluent => f =>
+			f.Query(QueryFluent).Index(PercolationIndex).AllTypes();
+
+		//hide
+		protected override SearchRequest<ProjectPercolation> Initializer =>
+			new SearchRequest<ProjectPercolation>(PercolationIndex, Types.All)
+			{
+				Query = this.QueryInitializer
+			};
+
+		protected QueryContainer QueryInitializer => new PercolateQuery
+		{
+			Documents = Project.Projects.Take(3).ToArray(),
+			Field = Infer.Field<ProjectPercolation>(f => f.Query)
+		};
+
+		protected QueryContainer QueryFluent(QueryContainerDescriptor<ProjectPercolation> q) => q
+			.Percolate(p => p
+				.Documents(Project.Projects.Take(3))
+				.Field(f => f.Query)
+			);
+
+		protected override void ExpectResponse(ISearchResponse<ProjectPercolation> response)
+		{
+			response.Total.Should().BeGreaterThan(0);
+			response.Hits.Should().NotBeNull();
+			response.Hits.Count().Should().BeGreaterThan(0);
+			var match = response.Documents.First();
+			match.Id.Should().Be(PercolatorId);
+			((IQueryContainer)match.Query).Match.Should().NotBeNull();
+		}
+
+		protected ConditionlessWhen ConditionlessWhen => new ConditionlessWhen<IPercolateQuery>(a => a.Percolate)
+		{
+			q => {
+				q.Documents = null;
+			}
+		};
+	}
+
+
 }

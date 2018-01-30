@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Linq;
 using System.Linq.Expressions;
 using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace Nest
 {
@@ -30,6 +32,13 @@ namespace Nest
 		[JsonProperty("document")]
 		[JsonConverter(typeof(SourceConverter))]
 		object Document { get; set; }
+
+		/// <summary>
+		/// Like the document parameter, but accepts multiple documents.
+		/// </summary>
+		[JsonProperty("documents")]
+		[JsonConverter(typeof(SourceConverter))]
+		IEnumerable<object> Documents { get; set; }
 
 		/// <summary>
 		/// The id of the document to fetch for percolation.
@@ -85,7 +94,7 @@ namespace Nest
 
 		internal static bool IsConditionless(IPercolateQuery q)
 		{
-			var docFields = q.Document == null;
+			var docFields = q.Document == null && (q.Documents == null || q.Documents.Count() == 0);
 			if (!docFields) return false;
 
 			return q.Type.IsConditionless() ||
@@ -109,6 +118,11 @@ namespace Nest
 		/// The source of the document to percolate.
 		/// </summary>
 		public object Document { get; set; }
+
+		/// <summary>
+		/// Like the document parameter, but accepts multiple documents.
+		/// </summary>
+		public IEnumerable<object> Documents { get; set; }
 
 		/// <summary>
 		/// The id of the document to fetch for percolation.
@@ -135,7 +149,7 @@ namespace Nest
 		/// </summary>
 		public Routing Routing
 		{
-			get => _routing ?? (Document == null ? null : new Routing(Document));
+			get => _routing ?? (Document == null && (Document == null || Documents.Count() == 0)? null : new Routing(Document ?? Documents.First()));
 			set => _routing = value;
 		}
 
@@ -163,6 +177,7 @@ namespace Nest
 		Field IPercolateQuery.Field { get; set; }
 		TypeName IPercolateQuery.DocumentType { get; set; }
 		object IPercolateQuery.Document { get; set; }
+		IEnumerable<object> IPercolateQuery.Documents { get; set; }
 		Id IPercolateQuery.Id { get; set; }
 		IndexName IPercolateQuery.Index { get; set; }
 		TypeName IPercolateQuery.Type { get; set; }
@@ -170,7 +185,7 @@ namespace Nest
 		private Routing _routing;
 		Routing IPercolateQuery.Routing
 		{
-			get => _routing ?? (Self.Document == null ? null : new Routing(Self.Document));
+			get => _routing ?? (Self.Document == null && (Self.Documents == null || Self.Documents.Count() == 0)? null : new Routing(Self.Document ?? Self.Documents.First()));
 			set => _routing = value;
 		}
 
@@ -210,6 +225,11 @@ namespace Nest
 		/// </summary>
 		public PercolateQueryDescriptor<T> Document<TDocument>(TDocument document) => Assign(a => a.Document = document);
 
+		/// <summary>
+		/// Like the document parameter, but accepts multiple documents.
+		/// </summary>
+		public PercolateQueryDescriptor<T> Documents<TDocument>(IEnumerable<TDocument> documents) => Assign(a => a.Documents = documents.Cast<object>());
+		
 		/// <summary>
 		/// The id of the document to fetch for percolation.
 		/// Can be specified to percolate an existing document instead of providing <see cref="Document{TDocument}"/>
